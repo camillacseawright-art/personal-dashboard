@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Plane, Briefcase, Users, CheckCircle2, Circle } from "lucide-react"
+import { Plus, Trash2, Plane, Briefcase, Users, CheckCircle2, Circle, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,8 @@ export default function TravelPage() {
   const [trips, setTrips] = useState<TravelPlan[]>([])
   const [form, setForm] = useState({ travelerName: "", destination: "", departDate: "", returnDate: "", tripType: "personal", notes: "" })
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState({ travelerName: "", destination: "", departDate: "", returnDate: "", tripType: "personal", notes: "" })
 
   useEffect(() => { fetch("/api/travel").then(r => r.json()).then(setTrips) }, [])
 
@@ -25,6 +27,19 @@ export default function TravelPage() {
     setTrips(prev => [...prev, trip].sort((a, b) => a.departDate.localeCompare(b.departDate)))
     setForm({ travelerName: "", destination: "", departDate: "", returnDate: "", tripType: "personal", notes: "" })
     setOpen(false)
+  }
+
+  function startEdit(trip: TravelPlan) {
+    setEditForm({ travelerName: trip.travelerName, destination: trip.destination, departDate: trip.departDate, returnDate: trip.returnDate ?? "", tripType: trip.tripType ?? "personal", notes: trip.notes ?? "" })
+    setEditingId(trip.id)
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    const res = await fetch(`/api/travel/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) })
+    const updated = await res.json()
+    setTrips(prev => prev.map(t => t.id === updated.id ? updated : t).sort((a, b) => a.departDate.localeCompare(b.departDate)))
+    setEditingId(null)
   }
 
   async function togglePacking(trip: TravelPlan) {
@@ -75,6 +90,32 @@ export default function TravelPage() {
         </Dialog>
       </div>
 
+      {editingId && (
+        <Dialog open={!!editingId} onOpenChange={open => !open && setEditingId(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Edit Trip</DialogTitle></DialogHeader>
+            <form onSubmit={saveEdit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Traveler</Label><Input required value={editForm.travelerName} onChange={e => setEditForm(f => ({ ...f, travelerName: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Destination</Label><Input required value={editForm.destination} onChange={e => setEditForm(f => ({ ...f, destination: e.target.value }))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Depart</Label><Input type="date" required value={editForm.departDate} onChange={e => setEditForm(f => ({ ...f, departDate: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Return</Label><Input type="date" value={editForm.returnDate} onChange={e => setEditForm(f => ({ ...f, returnDate: e.target.value }))} /></div>
+              </div>
+              <div className="space-y-1"><Label>Type</Label>
+                <Select value={editForm.tripType} onValueChange={v => setEditForm(f => ({ ...f, tripType: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="personal">Personal</SelectItem><SelectItem value="work">Work</SelectItem><SelectItem value="family">Family</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1"><Label>Notes</Label><Input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} /></div>
+              <div className="flex gap-2"><Button type="submit" className="flex-1 bg-[#C8553D] hover:bg-[#A8442F]">Save</Button><Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button></div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {upcoming.length === 0 && <p className="text-sm text-[#8B7355] italic text-center py-8">No upcoming travel planned.</p>}
 
       <div className="space-y-3">
@@ -114,6 +155,7 @@ export default function TravelPage() {
                       </button>
                     </div>
                   </div>
+                  <button onClick={() => startEdit(trip)} className="text-neutral-300 hover:text-[#C8553D] transition-colors"><Pencil className="h-4 w-4" /></button>
                   <button onClick={() => deleteTrip(trip.id)} className="text-neutral-300 hover:text-red-400 transition-colors">
                     <Trash2 className="h-4 w-4" />
                   </button>

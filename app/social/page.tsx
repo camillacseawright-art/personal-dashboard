@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Gift, Calendar } from "lucide-react"
+import { Plus, Trash2, Gift, Calendar, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,8 +18,23 @@ export default function SocialPage() {
   const [events, setEvents] = useState<SocialEvent[]>([])
   const [form, setForm] = useState({ personName: "", eventType: "birthday", eventDate: "", giftStatus: "none", rsvpStatus: "pending", rsvpDeadline: "", notes: "" })
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState({ personName: "", eventType: "birthday", eventDate: "", giftStatus: "none", rsvpStatus: "pending", rsvpDeadline: "", notes: "" })
 
   useEffect(() => { fetch("/api/social").then(r => r.json()).then(setEvents) }, [])
+
+  function startEdit(event: SocialEvent) {
+    setEditForm({ personName: event.personName, eventType: event.eventType ?? "birthday", eventDate: event.eventDate, giftStatus: event.giftStatus ?? "none", rsvpStatus: event.rsvpStatus ?? "pending", rsvpDeadline: event.rsvpDeadline ?? "", notes: event.notes ?? "" })
+    setEditingId(event.id)
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    const res = await fetch(`/api/social/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) })
+    const updated = await res.json()
+    setEvents(prev => prev.map(ev => ev.id === updated.id ? updated : ev).sort((a, b) => a.eventDate.localeCompare(b.eventDate)))
+    setEditingId(null)
+  }
 
   async function addEvent(e: React.FormEvent) {
     e.preventDefault()
@@ -94,6 +109,31 @@ export default function SocialPage() {
         </Dialog>
       </div>
 
+      {editingId && (
+        <Dialog open={!!editingId} onOpenChange={o => !o && setEditingId(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Edit Event</DialogTitle></DialogHeader>
+            <form onSubmit={saveEdit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Person / Event</Label><Input required value={editForm.personName} onChange={e => setEditForm(f => ({ ...f, personName: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Type</Label>
+                  <Select value={editForm.eventType} onValueChange={v => setEditForm(f => ({ ...f, eventType: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="birthday">Birthday</SelectItem><SelectItem value="anniversary">Anniversary</SelectItem><SelectItem value="rsvp">RSVP/Party</SelectItem><SelectItem value="visit">Visit</SelectItem><SelectItem value="holiday">Holiday</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Date</Label><Input type="date" required value={editForm.eventDate} onChange={e => setEditForm(f => ({ ...f, eventDate: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>RSVP Deadline</Label><Input type="date" value={editForm.rsvpDeadline} onChange={e => setEditForm(f => ({ ...f, rsvpDeadline: e.target.value }))} /></div>
+              </div>
+              <div className="space-y-1"><Label>Notes</Label><Input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} /></div>
+              <div className="flex gap-2"><Button type="submit" className="flex-1 bg-[#C8553D] hover:bg-[#A8442F]">Save</Button><Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button></div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {upcoming.length === 0 && <p className="text-sm text-[#8B7355] italic text-center py-8">No upcoming events.</p>}
 
       <div className="space-y-3">
@@ -141,6 +181,7 @@ export default function SocialPage() {
                       )}
                     </div>
                   </div>
+                  <button onClick={() => startEdit(event)} className="text-neutral-300 hover:text-[#C8553D] transition-colors flex-shrink-0"><Pencil className="h-4 w-4" /></button>
                   <button onClick={() => deleteEvent(event.id)} className="text-neutral-300 hover:text-red-400 transition-colors flex-shrink-0">
                     <Trash2 className="h-4 w-4" />
                   </button>

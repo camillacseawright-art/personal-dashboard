@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, User, Baby, PawPrint } from "lucide-react"
+import { Plus, Trash2, User, Baby, PawPrint, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,12 +16,12 @@ const COLORS: Record<string, string> = {
   blue: "bg-blue-400", purple: "bg-purple-400", pink: "bg-pink-400",
 }
 
-function MemberCard({ member, onDelete }: { member: FamilyMember; onDelete: () => void }) {
+function MemberCard({ member, onDelete, onEdit }: { member: FamilyMember; onDelete: () => void; onEdit: () => void }) {
   const Icon = member.role === "kid" ? Baby : member.role === "pet" ? PawPrint : User
   const age = member.birthdate ? differenceInYears(new Date(), parseISO(member.birthdate)) : null
   return (
     <Card>
-      <CardContent className="p-4 flex items-start gap-3">
+      <CardContent className="p-4 flex items-start gap-3 group">
         <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white", COLORS[member.avatarColor] ?? "bg-neutral-400")}>
           <Icon className="h-5 w-5" />
         </div>
@@ -35,9 +35,8 @@ function MemberCard({ member, onDelete }: { member: FamilyMember; onDelete: () =
           {member.phone && <p className="text-xs text-[#8B7355]">📞 {member.phone}</p>}
           {member.notes && <p className="text-xs text-[#8B7355] mt-1 italic">{member.notes}</p>}
         </div>
-        <button onClick={onDelete} className="text-neutral-300 hover:text-red-400 transition-colors">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <button onClick={onEdit} className="text-neutral-300 hover:text-[#C8553D] transition-colors opacity-0 group-hover:opacity-100"><Pencil className="h-4 w-4" /></button>
+        <button onClick={onDelete} className="text-neutral-300 hover:text-red-400 transition-colors"><Trash2 className="h-4 w-4" /></button>
       </CardContent>
     </Card>
   )
@@ -102,6 +101,8 @@ function AddMemberDialog({ onAdd }: { onAdd: (m: FamilyMember) => void }) {
 
 export default function FamilyPage() {
   const [members, setMembers] = useState<FamilyMember[]>([])
+  const [editingMember, setEditingMember] = useState<FamilyMember | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
   const adults = members.filter(m => m.role === "adult")
   const kids = members.filter(m => m.role === "kid")
   const pets = members.filter(m => m.role === "pet")
@@ -113,6 +114,20 @@ export default function FamilyPage() {
     setMembers(prev => prev.filter(m => m.id !== id))
   }
 
+  function startEdit(member: FamilyMember) {
+    setEditingMember(member)
+    setEditOpen(true)
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingMember) return
+    const res = await fetch(`/api/family/${editingMember.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editingMember) })
+    const updated = await res.json()
+    setMembers(prev => prev.map(m => m.id === updated.id ? updated : m))
+    setEditOpen(false)
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
@@ -120,11 +135,44 @@ export default function FamilyPage() {
           <p className="text-[#8B7355] mt-1">Everyone in the household.</p></div>
         <AddMemberDialog onAdd={m => setMembers(prev => [...prev, m])} />
       </div>
+
+      {editingMember && (
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Edit {editingMember.name}</DialogTitle></DialogHeader>
+            <form onSubmit={saveEdit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Name</Label><Input required value={editingMember.name} onChange={e => setEditingMember(m => m ? { ...m, name: e.target.value } : m)} /></div>
+                <div className="space-y-1"><Label>Role</Label>
+                  <Select value={editingMember.role ?? "adult"} onValueChange={v => setEditingMember(m => m ? { ...m, role: v } : m)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="adult">Adult</SelectItem><SelectItem value="kid">Kid</SelectItem><SelectItem value="pet">Pet</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Birthdate</Label><Input type="date" value={editingMember.birthdate ?? ""} onChange={e => setEditingMember(m => m ? { ...m, birthdate: e.target.value } : m)} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input value={editingMember.phone ?? ""} onChange={e => setEditingMember(m => m ? { ...m, phone: e.target.value } : m)} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>School</Label><Input value={editingMember.school ?? ""} onChange={e => setEditingMember(m => m ? { ...m, school: e.target.value } : m)} /></div>
+                <div className="space-y-1"><Label>Grade</Label><Input value={editingMember.grade ?? ""} onChange={e => setEditingMember(m => m ? { ...m, grade: e.target.value } : m)} /></div>
+              </div>
+              <div className="space-y-1"><Label>Notes</Label><Input value={editingMember.notes ?? ""} onChange={e => setEditingMember(m => m ? { ...m, notes: e.target.value } : m)} placeholder="Allergies, meds, bedtime..." /></div>
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1 bg-[#C8553D] hover:bg-[#A8442F]">Save</Button>
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {[{ label: "Adults", items: adults }, { label: "Kids", items: kids }, { label: "Pets", items: pets }].map(({ label, items }) =>
         items.length > 0 && (
           <div key={label}>
             <h3 className="text-xs font-semibold text-[#8B7355] uppercase tracking-wide mb-2">{label}</h3>
-            <div className="space-y-2">{items.map(m => <MemberCard key={m.id} member={m} onDelete={() => deleteMember(m.id)} />)}</div>
+            <div className="space-y-2">{items.map(m => <MemberCard key={m.id} member={m} onDelete={() => deleteMember(m.id)} onEdit={() => startEdit(m)} />)}</div>
           </div>
         )
       )}
